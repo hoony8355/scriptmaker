@@ -198,7 +198,8 @@ const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading }) => {
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">3. 스크립트 톤앤매너</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {Object.values(Tone).map((t) => (
+              {/* FIX: Cast Object.values(Tone) to Tone[] to fix type inference with generic OptionButton component. */}
+              {(Object.values(Tone) as Tone[]).map((t) => (
                 <OptionButton key={t} value={t} selectedValue={tone} setSelectedValue={setTone}>
                   {t}
                 </OptionButton>
@@ -209,7 +210,8 @@ const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading }) => {
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">4. 스크립트 길이</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {Object.values(ScriptLength).map((l) => (
+              {/* FIX: Cast Object.values(ScriptLength) to ScriptLength[] to fix type inference with generic OptionButton component. */}
+              {(Object.values(ScriptLength) as ScriptLength[]).map((l) => (
                 <OptionButton key={l} value={l} selectedValue={length} setSelectedValue={setLength}>
                   {l}
                 </OptionButton>
