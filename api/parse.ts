@@ -1,9 +1,6 @@
+
 import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
-
-export const config = {
-  runtime: 'edge',
-};
 
 // Helper to recursively find all text values ('a:t') in the parsed XML object
 const extractTextFromNode = (node: any): string => {

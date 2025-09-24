@@ -2,10 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ScriptGenerationParams, SlideScript } from '../types';
 
-export const config = {
-  runtime: 'edge',
-};
-
 // This function will be deployed as a serverless function.
 // It will handle the API request from the frontend.
 export default async function handler(req: Request) {
@@ -90,8 +86,12 @@ export default async function handler(req: Request) {
         },
     });
 
-    const jsonText = response.text.trim();
-    const parsedResult = JSON.parse(jsonText);
+    const jsonText = response.text;
+    if (!jsonText) {
+      throw new Error("The AI model returned an empty response. Please try again.");
+    }
+    const parsedResult = JSON.parse(jsonText.trim());
+
 
     return new Response(JSON.stringify(parsedResult), {
       status: 200,
