@@ -22,4 +22,5 @@ export interface ScriptGenerationParams {
 export interface SlideScript {
   slideNumber: number;
   script: string;
+  estimatedSpeakingTime: number; // in seconds
 }

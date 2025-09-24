@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { ScriptGenerationParams, SlideScript } from '../types';
 
@@ -48,8 +49,9 @@ export default async function handler(req: Request) {
         Based on all the information above, please generate a script for each slide.
         - The script should be written as if a speaker is presenting it.
         - Ensure the script for each slide aligns with the provided tone and length requirements.
+        - For each script, also provide an "estimatedSpeakingTime" in seconds, based on an average speaking rate.
         - The final output must be a valid JSON array where each object represents one slide.
-        - Each object must have two keys: "slideNumber" (an integer, starting from 1) and "script" (the generated text for that slide).
+        - Each object must have three keys: "slideNumber" (an integer, starting from 1), "script" (the generated text for that slide), and "estimatedSpeakingTime" (an integer representing the speaking time in seconds).
         - Format the script text with paragraphs separated by "\\n\\n" for readability.
         `;
     };
@@ -66,9 +68,13 @@ export default async function handler(req: Request) {
             script: {
                 type: Type.STRING,
                 description: 'The generated presentation script for the slide.'
+            },
+            estimatedSpeakingTime: {
+                type: Type.INTEGER,
+                description: 'The estimated speaking time for the slide script in seconds.'
             }
             },
-            required: ['slideNumber', 'script']
+            required: ['slideNumber', 'script', 'estimatedSpeakingTime']
         }
     };
 

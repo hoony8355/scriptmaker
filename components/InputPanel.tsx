@@ -11,6 +11,21 @@ interface InputPanelProps {
   isLoading: boolean;
 }
 
+// FIX: Moved OptionButton outside of the InputPanel component to prevent re-creation on every render and fix props-related TypeScript errors.
+const OptionButton = <T,>({ value, selectedValue, setSelectedValue, children }: { value: T, selectedValue: T, setSelectedValue: (value: T) => void, children: React.ReactNode }) => (
+  <button
+    type="button"
+    onClick={() => setSelectedValue(value)}
+    className={`px-3 py-2 text-sm rounded-md transition-colors duration-200 w-full text-left ${
+      selectedValue === value
+        ? 'bg-blue-600 text-white shadow-md'
+        : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+    }`}
+  >
+    {children}
+  </button>
+);
+
 const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading }) => {
   const [slideContent, setSlideContent] = useState('');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -98,20 +113,6 @@ const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading }) => {
       onGenerate({ slideContent, intention, tone, length });
     }
   };
-
-  const OptionButton = <T,>({ value, selectedValue, setSelectedValue, children }: { value: T, selectedValue: T, setSelectedValue: (value: T) => void, children: React.ReactNode }) => (
-    <button
-      type="button"
-      onClick={() => setSelectedValue(value)}
-      className={`px-3 py-2 text-sm rounded-md transition-colors duration-200 w-full text-left ${
-        selectedValue === value
-          ? 'bg-blue-600 text-white shadow-md'
-          : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-      }`}
-    >
-      {children}
-    </button>
-  );
 
   return (
     <div className="w-full md:w-1/3 lg:w-2/5 p-6 bg-slate-800/50 border-r border-slate-700/50 flex-shrink-0">
