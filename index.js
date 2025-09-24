@@ -2,13 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// Define the type for the global variable for type safety
-declare global {
-  interface Window {
-    pptx2json: any;
-  }
-}
-
 const startApp = () => {
   const rootElement = document.getElementById('root');
   if (!rootElement) {
