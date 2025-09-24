@@ -7,6 +7,7 @@
     "build": "mkdir -p dist && npx esbuild index.tsx --bundle --outfile=dist/index.js --jsx=automatic"
   },
   "dependencies": {
+    "@google/genai": "^1.20.0",
     "jszip": "^3.10.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
@@ -15,6 +16,7 @@
     "esbuild": "^0.23.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@types/node": "^20.14.9",
     "typescript": "^5.5.3"
   }
 }
