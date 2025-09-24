@@ -1,6 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ScriptGenerationParams, SlideScript } from '../types';
 
+export const config = {
+  runtime: 'edge',
+};
+
 // This function will be deployed as a serverless function.
 // It will handle the API request from the frontend.
 export default async function handler(req: Request) {
