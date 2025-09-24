@@ -1,0 +1,5 @@
+{
+  "name": "Copy of AI Presentation Script Generator",
+  "description": "An application that automatically generates presentation scripts from slide content and a planning brief, with options for tone and length.",
+  "requestFramePermissions": []
+}
