@@ -18,17 +18,29 @@ const startApp = () => {
 
 // Function to check if the library is loaded and start the app
 const checkLibraryAndStart = () => {
-  // The pptx2json library attaches itself to the window object.
-  // We'll wait until it's available before starting the React app.
-  if (typeof window.pptx2json !== 'undefined') {
-    console.log('pptx2json library found. Starting the application.');
+  // The pptx2json library and its dependency JSZip attach themselves to the window object.
+  // We check for them after the DOM is loaded.
+  if (typeof window.pptx2json !== 'undefined' && typeof window.JSZip !== 'undefined') {
+    console.log('pptx2json and JSZip libraries found. Starting the application.');
     startApp();
   } else {
-    // If not found, wait a bit and check again.
-    console.warn('pptx2json library not yet available, retrying in 100ms...');
-    setTimeout(checkLibraryAndStart, 100);
+    // If not found, it's a fatal error because all synchronous scripts should have loaded.
+    console.error('FATAL: A required library (pptx2json or JSZip) failed to load.');
+    const rootElement = document.getElementById('root');
+    if (rootElement) {
+        let errorMessage = '<h2>An error occurred while loading the application.</h2>';
+        if (typeof window.JSZip === 'undefined') {
+            errorMessage += '<p>The dependency library JSZip could not be loaded.</p>';
+        }
+        if (typeof window.pptx2json === 'undefined') {
+            errorMessage += '<p>The library for parsing presentations (pptx2json) could not be loaded.</p>';
+        }
+        errorMessage += '<p>Please check your internet connection and try refreshing the page.</p>';
+        rootElement.innerHTML = `<div style="font-family: sans-serif; color: #fca5a5; background-color: #7f1d1d; border: 1px solid #dc2626; padding: 2rem; margin: 2rem; border-radius: 0.5rem;">${errorMessage}</div>`;
+    }
   }
 };
 
-// Start the check to launch the application
-checkLibraryAndStart();
+// Wait until the initial HTML document has been completely loaded and parsed.
+// All synchronous <script> tags are guaranteed to have been executed at this point.
+document.addEventListener('DOMContentLoaded', checkLibraryAndStart);
