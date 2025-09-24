@@ -1,19 +1,14 @@
-
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI, Type } from "@google/genai";
-import { ScriptGenerationParams, SlideScript } from '../types';
+import { ScriptGenerationParams } from '../types';
 
-// This function will be deployed as a serverless function.
-// It will handle the API request from the frontend.
-export default async function handler(req: Request) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const params = (await req.json()) as ScriptGenerationParams;
+    const params = req.body as ScriptGenerationParams;
 
     if (!process.env.API_KEY) {
       throw new Error("API_KEY environment variable not set.");
@@ -92,18 +87,11 @@ export default async function handler(req: Request) {
     }
     const parsedResult = JSON.parse(jsonText.trim());
 
-
-    return new Response(JSON.stringify(parsedResult), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(200).json(parsedResult);
 
   } catch (error) {
     console.error("Error in serverless function:", error);
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-    return new Response(JSON.stringify({ error: `Failed to generate script: ${errorMessage}` }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(500).json({ error: `Failed to generate script: ${errorMessage}` });
   }
 }

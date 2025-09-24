@@ -14,10 +14,11 @@
     "fast-xml-parser": "^4.4.0"
   },
   "devDependencies": {
-    "esbuild": "^0.23.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@types/node": "^20.14.9",
+    "@vercel/node": "^3.2.0",
+    "esbuild": "^0.23.0",
     "typescript": "^5.5.3"
   }
 }
