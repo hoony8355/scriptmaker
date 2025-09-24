@@ -1,6 +1,6 @@
-import { ScriptGenerationParams, SlideScript } from '../types';
+import { SingleSlideScriptGenerationParams, SlideScript } from '../types';
 
-export const generateScript = async (params: ScriptGenerationParams): Promise<SlideScript[]> => {
+export const generateScript = async (params: SingleSlideScriptGenerationParams): Promise<SlideScript> => {
   try {
     const response = await fetch('/api/generate', {
       method: 'POST',
@@ -22,7 +22,7 @@ export const generateScript = async (params: ScriptGenerationParams): Promise<Sl
     }
 
     const result = await response.json();
-    return result as SlideScript[];
+    return result as SlideScript;
 
   } catch (error) {
     console.error("Error generating script:", error);

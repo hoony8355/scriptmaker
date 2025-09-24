@@ -1,4 +1,5 @@
 
+
 export enum Tone {
   FORMAL = '격식체 (Formal & Professional)',
   COLLOQUIAL = '구어체 (Conversational)',
@@ -14,6 +15,15 @@ export enum ScriptLength {
 
 export interface ScriptGenerationParams {
   slideContent: string;
+  intention: string;
+  tone: Tone;
+  length: ScriptLength;
+}
+
+export interface SingleSlideScriptGenerationParams {
+  slideNumber: number;
+  slideText: string;
+  totalSlides: number;
   intention: string;
   tone: Tone;
   length: ScriptLength;
