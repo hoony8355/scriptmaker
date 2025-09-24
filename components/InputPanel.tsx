@@ -1,247 +1,228 @@
-import React, { useState, useRef } from 'react';
-import JSZip from 'jszip';
+import React, { useState, useCallback, useRef } from 'react';
 import { Tone, ScriptLength, ScriptGenerationParams } from '../types';
 import SparklesIcon from './icons/SparklesIcon';
 import UploadIcon from './icons/UploadIcon';
 import FileTextIcon from './icons/FileTextIcon';
 import XCircleIcon from './icons/XCircleIcon';
 
+// Assuming a library like pptx2json is loaded globally, for instance from a CDN.
+// This would be added to index.html: <script src=".../pptx2json.min.js"></script>
+declare const pptx2json: {
+  parse(file: File): Promise<{ slides: { text: { value: string }[] }[] }>;
+};
+
 interface InputPanelProps {
   onGenerate: (params: ScriptGenerationParams) => void;
   isLoading: boolean;
 }
 
-// FIX: Moved OptionButton outside of the InputPanel component to prevent re-creation on every render and fix props-related TypeScript errors.
-const OptionButton = <T,>({ value, selectedValue, setSelectedValue, children }: { value: T, selectedValue: T, setSelectedValue: (value: T) => void, children: React.ReactNode }) => (
-  <button
-    type="button"
-    onClick={() => setSelectedValue(value)}
-    className={`px-3 py-2 text-sm rounded-md transition-colors duration-200 w-full text-left ${
-      selectedValue === value
-        ? 'bg-blue-600 text-white shadow-md'
-        : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-    }`}
-  >
-    {children}
-  </button>
+// Moved outside for performance: This prevents the component from being re-created on every render.
+const CustomSelect = ({ label, value, onChange, options }: { label: string, value: string, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void, options: { value: string, label: string }[] }) => (
+    <div>
+      <label className="block text-sm font-medium text-slate-300 mb-2">{label}</label>
+      <select
+        value={value}
+        onChange={onChange}
+        className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </div>
 );
 
-const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading }) => {
-  const [slideContent, setSlideContent] = useState('');
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isParsing, setIsParsing] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+const TONE_OPTIONS = [
+    { value: Tone.FORMAL, label: Tone.FORMAL },
+    { value: Tone.COLLOQUIAL, label: Tone.COLLOQUIAL },
+    { value: Tone.CONCISE, label: Tone.CONCISE },
+    { value: Tone.PASSIONATE, label: Tone.PASSIONATE },
+];
 
+const LENGTH_OPTIONS = [
+    { value: ScriptLength.SHORT, label: ScriptLength.SHORT },
+    { value: ScriptLength.MEDIUM, label: ScriptLength.MEDIUM },
+    { value: ScriptLength.LONG, label: ScriptLength.LONG },
+];
+
+const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading }) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [slideContent, setSlideContent] = useState<string>('');
   const [intention, setIntention] = useState('');
   const [tone, setTone] = useState<Tone>(Tone.FORMAL);
   const [length, setLength] = useState<ScriptLength>(ScriptLength.MEDIUM);
+  const [isParsing, setIsParsing] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFile = async (file: File) => {
-    const fileType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-    if (file && (file.type === fileType || file.name.toLowerCase().endsWith('.pptx'))) {
-      setUploadedFile(file);
-      setIsParsing(true);
-      setSlideContent('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-      try {
-        const zip = await JSZip.loadAsync(file);
-        const slideFiles = zip.filter((path) => path.startsWith("ppt/slides/slide") && path.endsWith(".xml"));
+  const handleFileChange = useCallback(async (selectedFile: File | null) => {
+    if (!selectedFile) return;
 
-        slideFiles.sort((a, b) => {
-            const numA = parseInt(a.name.match(/slide(\d+)\.xml/)![1], 10);
-            const numB = parseInt(b.name.match(/slide(\d+)\.xml/)![1], 10);
-            return numA - numB;
-        });
-
-        const parser = new DOMParser();
-        const slideTextsPromises = slideFiles.map(async (slideFile) => {
-            const slideXml = await slideFile.async("string");
-            const xmlDoc = parser.parseFromString(slideXml, "application/xml");
-            const textNodes = xmlDoc.getElementsByTagName("a:t");
-            return Array.from(textNodes).map(node => node.textContent?.trim()).join(' ').replace(/\s+/g, ' ').trim();
-        });
-        
-        const slideTexts = await Promise.all(slideTextsPromises);
-        setSlideContent(slideTexts.join('\n\n---SLIDE BREAK---\n\n'));
-
-      } catch (error) {
-        console.error("Error parsing PPTX file:", error);
-        alert("PPTX 파일을 분석하는 중 오류가 발생했습니다. 파일이 손상되지 않았는지 확인해주세요.");
-        removeFile();
-      } finally {
-        setIsParsing(false);
-      }
-    } else {
-      alert("오류: .pptx 파일만 업로드할 수 있습니다.");
-      setUploadedFile(null);
-      setSlideContent('');
+    if (selectedFile.type !== 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+      setParseError('Please upload a valid .pptx file.');
+      setFile(null);
+      return;
     }
+
+    setFile(selectedFile);
+    setIsParsing(true);
+    setParseError(null);
+    setSlideContent('');
+
+    try {
+      if (typeof pptx2json === 'undefined') {
+        console.error("pptx2json library not found. Please ensure it's loaded.");
+        throw new Error('PPTX parsing library is not loaded.');
+      }
+      
+      const jsonData = await pptx2json.parse(selectedFile);
+      const content = jsonData.slides.map((slide, index) => {
+        const slideText = (slide.text || []).map((textItem) => textItem.value).join(' ');
+        return `Slide ${index + 1}:\n${slideText}`;
+      }).join('\n\n---SLIDE BREAK---\n\n');
+      
+      if (!content.trim()) {
+        throw new Error("No text content found in the presentation.");
+      }
+      setSlideContent(content);
+    } catch (error) {
+      console.error('Error parsing PPTX file:', error);
+      const message = error instanceof Error ? error.message : 'An unknown error occurred during parsing.';
+      setParseError(`Failed to parse file: ${message}`);
+      setFile(null);
+      setSlideContent('');
+    } finally {
+      setIsParsing(false);
+    }
+  }, []);
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
   };
 
-  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); };
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFile(e.dataTransfer.files[0]);
-      e.dataTransfer.clearData();
+      handleFileChange(e.dataTransfer.files[0]);
     }
-  };
+  }, [handleFileChange]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleFile(e.target.files[0]);
+        handleFileChange(e.target.files[0]);
     }
   };
 
   const removeFile = () => {
-    setUploadedFile(null);
+    setFile(null);
     setSlideContent('');
-    setIsParsing(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+    setParseError(null);
+    if(fileInputRef.current) {
+        fileInputRef.current.value = "";
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (slideContent && intention) {
-      onGenerate({ slideContent, intention, tone, length });
-    }
+    if (!isFormValid || isLoading) return;
+
+    const params: ScriptGenerationParams = {
+      slideContent,
+      intention,
+      tone,
+      length,
+    };
+    onGenerate(params);
   };
+  
+  const isFormValid = !!slideContent && intention.trim() !== '' && !isParsing && !isLoading;
 
   return (
-    <div className="w-full md:w-1/3 lg:w-2/5 p-6 bg-slate-800/50 border-r border-slate-700/50 flex-shrink-0">
-      <form onSubmit={handleSubmit} className="space-y-6 h-full flex flex-col">
-        <div className="flex-grow flex flex-col space-y-6 overflow-y-auto pr-2">
-          <div>
-            <label htmlFor="file-upload" className="block text-sm font-medium text-slate-300 mb-2">
-              1. 발표 자료 업로드 (.pptx)
-            </label>
-            {uploadedFile ? (
-              <div className="flex items-center justify-between bg-slate-900/50 border border-slate-600 rounded-lg p-3 text-slate-200">
-                <div className="flex items-center space-x-3 min-w-0">
-                  {isParsing ? (
-                    <svg className="animate-spin h-5 w-5 text-blue-400 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  ) : (
-                    <FileTextIcon className="w-6 h-6 text-blue-400 flex-shrink-0" />
-                  )}
-                  <span className="text-sm font-medium truncate" title={uploadedFile.name}>
-                    {isParsing ? `'${uploadedFile.name}' 분석 중...` : uploadedFile.name}
-                  </span>
-                </div>
-                {!isParsing && (
-                  <button
-                    type="button"
-                    onClick={removeFile}
-                    className="p-1 text-slate-400 hover:text-white rounded-full hover:bg-slate-700 transition-colors flex-shrink-0 ml-2"
-                    title="Remove file"
-                  >
-                    <XCircleIcon className="w-5 h-5" />
-                  </button>
-                )}
+    <div className="w-full md:w-1/3 lg:w-2/5 p-6 bg-slate-800 border-r border-slate-700 overflow-y-auto">
+      <h2 className="text-xl font-bold text-white mb-6">입력 정보</h2>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">1. PPTX 파일 업로드</label>
+          {file ? (
+            <div className="flex items-center justify-between bg-slate-700 p-3 rounded-md">
+              <div className="flex items-center space-x-3 overflow-hidden">
+                <FileTextIcon className="w-6 h-6 text-blue-400 flex-shrink-0" />
+                <span className="text-sm text-white truncate">{file.name}</span>
               </div>
-            ) : (
-              <div
-                onDragEnter={handleDragEnter}
-                onDragLeave={handleDragLeave}
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`relative flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
-                  isDragging ? 'border-blue-500 bg-blue-900/20' : 'border-slate-600 hover:border-slate-500 hover:bg-slate-800/50'
-                }`}
-              >
-                <input
-                  type="file"
-                  id="file-upload"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                  className="hidden"
-                />
-                <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
-                  <UploadIcon className="w-8 h-8 mb-3 text-slate-500" />
-                  <p className="mb-2 text-sm text-slate-400">
-                    <span className="font-semibold text-blue-400">클릭하여 업로드</span>하거나 파일을 드래그하세요.
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    PPTX 프레젠테이션 파일
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="intention" className="block text-sm font-medium text-slate-300 mb-2">
-              2. 기획 의도 및 목표
-            </label>
-            <textarea
-              id="intention"
-              value={intention}
-              onChange={(e) => setIntention(e.target.value)}
-              rows={3}
-              className="w-full bg-slate-900/50 border border-slate-600 rounded-lg p-3 text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              placeholder="예: 이 제안의 핵심 기술력을 강조하여 투자 유치를 이끌어내는 것이 목표입니다."
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">3. 스크립트 톤앤매너</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {/* FIX: Cast Object.values(Tone) to Tone[] to fix type inference with generic OptionButton component. */}
-              {(Object.values(Tone) as Tone[]).map((t) => (
-                <OptionButton key={t} value={t} selectedValue={tone} setSelectedValue={setTone}>
-                  {t}
-                </OptionButton>
-              ))}
+              <button type="button" onClick={removeFile} className="text-slate-400 hover:text-white flex-shrink-0 ml-2">
+                <XCircleIcon className="w-5 h-5" />
+              </button>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">4. 스크립트 길이</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {/* FIX: Cast Object.values(ScriptLength) to ScriptLength[] to fix type inference with generic OptionButton component. */}
-              {(Object.values(ScriptLength) as ScriptLength[]).map((l) => (
-                <OptionButton key={l} value={l} selectedValue={length} setSelectedValue={setLength}>
-                  {l}
-                </OptionButton>
-              ))}
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex-shrink-0 pt-4 border-t border-slate-700">
-            <button
-              type="submit"
-              disabled={isLoading || isParsing || !slideContent || !intention}
-              className="w-full flex items-center justify-center bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 disabled:scale-100"
+          ) : (
+            <div
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-md cursor-pointer transition-colors ${isDragging ? 'border-blue-500 bg-slate-700/50' : 'border-slate-600 hover:border-slate-500'}`}
             >
-              {isLoading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  생성 중...
-                </>
-              ) : (
-                <>
-                  <SparklesIcon className="w-5 h-5 mr-2" />
-                  스크립트 생성하기
-                </>
-              )}
-            </button>
+              <UploadIcon className="w-10 h-10 text-slate-500 mb-3" />
+              <p className="text-slate-400 text-sm">여기에 파일을 드래그하거나 클릭하여 업로드</p>
+              <p className="text-slate-500 text-xs mt-1">.pptx 파일만 지원됩니다</p>
+              <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="hidden" />
+            </div>
+          )}
+          {isParsing && <p className="text-sm text-blue-400 mt-2">파일 분석 중...</p>}
+          {parseError && <p className="text-sm text-red-400 mt-2">{parseError}</p>}
         </div>
+
+        <div>
+          <label htmlFor="intention" className="block text-sm font-medium text-slate-300 mb-2">2. 발표의 목적 또는 의도</label>
+          <textarea
+            id="intention"
+            rows={4}
+            value={intention}
+            onChange={(e) => setIntention(e.target.value)}
+            className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="예: 이 발표를 통해 투자자들에게 우리 프로젝트의 비전과 잠재력을 설득하고 싶습니다."
+          />
+        </div>
+
+        <CustomSelect
+          label="3. 스크립트 톤앤매너"
+          value={tone}
+          onChange={(e) => setTone(e.target.value as Tone)}
+          options={TONE_OPTIONS}
+        />
+
+        <CustomSelect
+          label="4. 슬라이드 당 스크립트 분량"
+          value={length}
+          onChange={(e) => setLength(e.target.value as ScriptLength)}
+          options={LENGTH_OPTIONS}
+        />
+
+        <button
+          type="submit"
+          disabled={!isFormValid}
+          className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed disabled:text-slate-400 transition-colors"
+        >
+          <SparklesIcon className="w-5 h-5 mr-2" />
+          {isLoading ? '생성 중...' : '스크립트 생성하기'}
+        </button>
       </form>
     </div>
   );
