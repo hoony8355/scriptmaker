@@ -1,22 +1,16 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Tone, ScriptLength, ScriptGenerationParams } from '../types';
+import { parsePptxFile } from '../services/geminiService';
 import SparklesIcon from './icons/SparklesIcon';
 import UploadIcon from './icons/UploadIcon';
 import FileTextIcon from './icons/FileTextIcon';
 import XCircleIcon from './icons/XCircleIcon';
-
-// Assuming a library like pptx2json is loaded globally, for instance from a CDN.
-// This would be added to index.html: <script src=".../pptx2json.min.js"></script>
-declare const pptx2json: {
-  parse(file: File): Promise<{ slides: { text: { value: string }[] }[] }>;
-};
 
 interface InputPanelProps {
   onGenerate: (params: ScriptGenerationParams) => void;
   isLoading: boolean;
 }
 
-// Moved outside for performance: This prevents the component from being re-created on every render.
 const CustomSelect = ({ label, value, onChange, options }: { label: string, value: string, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void, options: { value: string, label: string }[] }) => (
     <div>
       <label className="block text-sm font-medium text-slate-300 mb-2">{label}</label>
@@ -72,25 +66,16 @@ const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading }) => {
     setSlideContent('');
 
     try {
-      if (typeof pptx2json === 'undefined') {
-        console.error("pptx2json library not found. Please ensure it's loaded.");
-        throw new Error('PPTX parsing library is not loaded.');
-      }
-      
-      const jsonData = await pptx2json.parse(selectedFile);
-      const content = jsonData.slides.map((slide, index) => {
-        const slideText = (slide.text || []).map((textItem) => textItem.value).join(' ');
-        return `Slide ${index + 1}:\n${slideText}`;
-      }).join('\n\n---SLIDE BREAK---\n\n');
+      const content = await parsePptxFile(selectedFile);
       
       if (!content.trim()) {
         throw new Error("No text content found in the presentation.");
       }
       setSlideContent(content);
     } catch (error) {
-      console.error('Error parsing PPTX file:', error);
+      console.error('Error parsing PPTX file via API:', error);
       const message = error instanceof Error ? error.message : 'An unknown error occurred during parsing.';
-      setParseError(`Failed to parse file: ${message}`);
+      setParseError(`Failed to process file: ${message}`);
       setFile(null);
       setSlideContent('');
     } finally {
@@ -185,7 +170,7 @@ const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading }) => {
               <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="hidden" />
             </div>
           )}
-          {isParsing && <p className="text-sm text-blue-400 mt-2">파일 분석 중...</p>}
+          {isParsing && <p className="text-sm text-blue-400 mt-2">파일 처리 중...</p>}
           {parseError && <p className="text-sm text-red-400 mt-2">{parseError}</p>}
         </div>
 
