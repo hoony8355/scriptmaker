@@ -4,7 +4,7 @@
   "description": "AI Presentation Script Generator",
   "private": true,
   "scripts": {
-    "build": "mkdir -p dist && npx esbuild index.tsx --bundle --outfile=dist/index.js --jsx=automatic"
+    "build": "mkdir -p dist && cp index.html dist/ && npx esbuild index.tsx --bundle --outfile=dist/index.js --jsx=automatic"
   },
   "dependencies": {
     "@google/genai": "^1.20.0",
