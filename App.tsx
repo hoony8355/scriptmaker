@@ -1,10 +1,12 @@
-
 import React, { useState, useCallback } from 'react';
 import Header from './components/Header';
 import InputPanel from './components/InputPanel';
 import OutputPanel from './components/OutputPanel';
 import { generateScript } from './services/geminiService';
 import { ScriptGenerationParams, SlideScript, SingleSlideScriptGenerationParams } from './types';
+
+// Function to introduce a delay
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const App: React.FC = () => {
   const [generatedScript, setGeneratedScript] = useState<SlideScript[] | null>(null);
@@ -41,6 +43,13 @@ const App: React.FC = () => {
             newScripts.sort((a, b) => a.slideNumber - b.slideNumber);
             return newScripts;
         });
+
+        // To comply with the API rate limit (e.g., 10 requests per minute for the free tier),
+        // we add a delay between requests. 60s / 10 req = 6s/req. We use 6100ms to be safe.
+        // We don't need to wait after the last slide.
+        if (i < slideTexts.length - 1) {
+            await sleep(6100);
+        }
       }
 
     } catch (e) {
