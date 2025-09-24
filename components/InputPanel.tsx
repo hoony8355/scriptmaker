@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
+import JSZip from 'jszip';
+import { XMLParser } from 'fast-xml-parser';
 import { Tone, ScriptLength, ScriptGenerationParams } from '../types';
-import { parsePptxFile } from '../services/geminiService';
 import SparklesIcon from './icons/SparklesIcon';
 import UploadIcon from './icons/UploadIcon';
 import FileTextIcon from './icons/FileTextIcon';
@@ -10,6 +11,38 @@ interface InputPanelProps {
   onGenerate: (params: ScriptGenerationParams) => void;
   isLoading: boolean;
 }
+
+// Helper to recursively find all text values ('a:t') in the parsed XML object
+const extractTextFromNode = (node: any): string => {
+  let text = '';
+  if (!node) {
+    return text;
+  }
+
+  // If the node is an 'a:t' element, return its text content
+  if (node['a:t']) {
+    // Content can be a string or an array of text parts
+    if (Array.isArray(node['a:t'])) {
+        return node['a:t'].map(t => t['#text'] || t).join('');
+    }
+    return node['a:t']['#text'] || node['a:t'] || '';
+  }
+
+  // If the node is an array, iterate over its items
+  if (Array.isArray(node)) {
+    return node.map(extractTextFromNode).join('');
+  }
+
+  // If the node is an object, iterate over its properties
+  if (typeof node === 'object') {
+    for (const key in node) {
+      text += extractTextFromNode(node[key]);
+    }
+  }
+  
+  return text;
+};
+
 
 const CustomSelect = ({ label, value, onChange, options }: { label: string, value: string, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void, options: { value: string, label: string }[] }) => (
     <div>
@@ -57,6 +90,9 @@ const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading }) => {
     if (selectedFile.type !== 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
       setParseError('Please upload a valid .pptx file.');
       setFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
       return;
     }
 
@@ -66,14 +102,45 @@ const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading }) => {
     setSlideContent('');
 
     try {
-      const content = await parsePptxFile(selectedFile);
-      
-      if (!content.trim()) {
-        throw new Error("No text content found in the presentation.");
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const zip = await JSZip.loadAsync(arrayBuffer);
+      const parser = new XMLParser({
+          ignoreAttributes: false,
+          attributeNamePrefix: '',
+          textNodeName: '#text',
+          isArray: (name, jpath) => jpath === 'p:sld.cSld.spTree.sp' || jpath === 'p:sld.cSld.spTree.grpSp' || jpath.endsWith('.r'),
+      });
+
+      const slidePromises = [];
+      for (const fileName in zip.files) {
+          if (fileName.match(/^ppt\/slides\/slide\d+\.xml$/)) {
+              slidePromises.push({
+                  number: parseInt(fileName.match(/(\d+)/)![0], 10),
+                  promise: zip.files[fileName].async('string')
+              });
+          }
       }
-      setSlideContent(content);
+
+      if (slidePromises.length === 0) {
+          throw new Error("No slides found in the PPTX file.");
+      }
+      
+      slidePromises.sort((a, b) => a.number - b.number);
+      const slideXmlContents = await Promise.all(slidePromises.map(p => p.promise));
+      
+      const allSlidesText = slideXmlContents.map((xmlContent, index) => {
+        const jsonObj = parser.parse(xmlContent);
+        const slideText = extractTextFromNode(jsonObj['p:sld']?.['p:cSld']?.['p:spTree']);
+        return `Slide ${index + 1}:\n${slideText.replace(/\s+/g, ' ').trim()}`;
+      }).join('\n\n---SLIDE BREAK---\n\n');
+
+      if (!allSlidesText.trim()) {
+        throw new Error("Could not extract any text from the presentation slides.");
+      }
+      
+      setSlideContent(allSlidesText);
     } catch (error) {
-      console.error('Error parsing PPTX file via API:', error);
+      console.error('Error parsing PPTX file on client:', error);
       const message = error instanceof Error ? error.message : 'An unknown error occurred during parsing.';
       setParseError(`Failed to process file: ${message}`);
       setFile(null);
