@@ -10,6 +10,7 @@ import XCircleIcon from './icons/XCircleIcon';
 interface InputPanelProps {
   onGenerate: (params: ScriptGenerationParams) => void;
   isLoading: boolean;
+  progressMessage?: string;
 }
 
 // Helper to recursively find all text values ('a:t') in the parsed XML object
@@ -72,7 +73,7 @@ const LENGTH_OPTIONS = [
     { value: ScriptLength.LONG, label: ScriptLength.LONG },
 ];
 
-const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading }) => {
+const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading, progressMessage }) => {
   const [file, setFile] = useState<File | null>(null);
   const [slideContent, setSlideContent] = useState<string>('');
   const [intention, setIntention] = useState('');
@@ -267,14 +268,21 @@ const InputPanel: React.FC<InputPanelProps> = ({ onGenerate, isLoading }) => {
           options={LENGTH_OPTIONS}
         />
 
-        <button
-          type="submit"
-          disabled={!isFormValid}
-          className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed disabled:text-slate-400 transition-colors"
-        >
-          <SparklesIcon className="w-5 h-5 mr-2" />
-          {isLoading ? '생성 중...' : '스크립트 생성하기'}
-        </button>
+        <div>
+          <button
+            type="submit"
+            disabled={!isFormValid}
+            className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed disabled:text-slate-400 transition-colors"
+          >
+            <SparklesIcon className="w-5 h-5 mr-2" />
+            {isLoading ? '생성 중...' : '스크립트 생성하기'}
+          </button>
+          {isLoading && progressMessage && (
+            <p className="text-center text-sm text-blue-300 mt-3 animate-pulse">
+                {progressMessage}
+            </p>
+          )}
+        </div>
       </form>
     </div>
   );

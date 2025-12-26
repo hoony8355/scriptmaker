@@ -11,6 +11,10 @@ export const generateScript = async (params: SingleSlideScriptGenerationParams):
         });
 
         if (!response.ok) {
+            if (response.status === 429) {
+                throw new Error("RATE_LIMIT_EXCEEDED");
+            }
+
             // Try to get a more detailed error message from the server response
             const errorText = await response.text();
             throw new Error(`서버 응답 오류 (상태 코드: ${response.status}): ${errorText}`);
@@ -30,6 +34,10 @@ export const generateScript = async (params: SingleSlideScriptGenerationParams):
         };
 
     } catch (error) {
+        if ((error as Error).message === "RATE_LIMIT_EXCEEDED") {
+            throw error; // Re-throw to be handled by caller
+        }
+
         console.error(`Error calling /api/generate for slide ${params.slideNumber}:`, error);
         
         let errorMessage = `슬라이드 ${params.slideNumber} 스크립트 생성 중 API 통신 오류가 발생했습니다.`;

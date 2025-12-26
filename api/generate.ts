@@ -82,8 +82,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         return res.status(200).json(scriptResult);
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error in generate handler:', error);
+        
+        // Check for rate limit/quota errors
+        // GoogleGenAI might throw an error with specific structure or message
+        const isRateLimit = error.status === 429 || 
+                            (error.message && (error.message.includes('429') || error.message.includes('Quota') || error.message.includes('RESOURCE_EXHAUSTED')));
+
+        if (isRateLimit) {
+            return res.status(429).json({ error: 'API Rate Limit Exceeded', details: error.message });
+        }
+
         const message = error instanceof Error ? error.message : 'An unknown server error occurred.';
         return res.status(500).json({ error: message });
     }
